@@ -3,6 +3,7 @@ import socket
 import time
 import cv2.cv2 as cv2
 import numpy as np
+import math
 
 host = ''
 port = 9000
@@ -39,7 +40,6 @@ def recv():
 recvThread = threading.Thread(target=recv)
 recvThread.start()
 
-
 def videoStream():
     global frame
     cap = cv2.VideoCapture(video_address, cv2.CAP_FFMPEG)
@@ -47,6 +47,17 @@ def videoStream():
     while ret:
         ret, frame = cap.read()
 
+def forward(vel):
+    print("We're moving forward!")
+    sent = sock.sendto(b'takeoff', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+
+def rotation(tvel,vvel,rvel):
+    print("We're yawing!")
+    #sent = sock.sendto(b'takeoff', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(tvel).encode() + str(vvel).encode() + str(rvel).encode(), command_address)
+
+    
 def videoDisplay():
     global frame
     while stream_state:
@@ -57,23 +68,72 @@ def videoDisplay():
         dim = (width, height)
         # resize image
         resized = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
+        #Center Point
+        x = width/2
+        y = height/2
+        center_coordinates = (int(x),int(y))
+        radius = 3
+        color = (0,0,255)
+        thickness = -1
+        cv2.circle(resized,center_coordinates,radius,color,thickness)
         cv2.imshow('original', resized)
         cv2.waitKey(1)
 
+        #############################################################
+        #########WALL AVOIDANCE######################################
+        #############################################################
+
+        #Median Blur
+        medianBlur = cv2.medianBlur(resized, 45)
+        cv2.imshow('Median Blur', medianBlur)
+        cv2.waitKey(1)
+
+        #Gresycale
+        grey_scale = cv2.cvtColor(medianBlur, cv2.COLOR_BGR2GRAY)
+        cv2.imshow('Grey Scale', grey_scale)
+        cv2.waitKey(1)
+
+        #Treshold
+        ret,thresh1 = cv2.threshold(grey_scale,127,255,cv2.THRESH_BINARY)
+        cv2.imshow('Treshold', thresh1)
+        cv2.waitKey(1)
+
+        # Closing
+        closekernel = np.ones((15,15),np.uint8)
+        closing = cv2.morphologyEx(thresh1, cv2.MORPH_CLOSE, closekernel)
+        cv2.imshow('Closing', closing)
+        cv2.waitKey(1)
+
+        # Blob Data
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(closing)
+        print(n)
+        #print(labels)
+        print(stats[labels][4])
+
+
+        #############################################################
+        ##########OBSTACLE AVOIDANCE#################################
+        #############################################################
+
         #GaussianBlur
-        blur = cv2.GaussianBlur(resized, (3, 3), 0)
-        #cv2.imshow('Gaussian Blur', blur)
-        #cv2.waitKey(1)
+        blur = cv2.GaussianBlur(resized, (11, 11), 0)
+        # cv2.imshow('Gaussian Blur', blur)
+        # cv2.waitKey(1)
 
         #HSV
         HSV = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-        #cv2.imshow('HSV', HSV)
+        # cv2.imshow('HSV', HSV)
+        # cv2.waitKey(1)
 
         #Mask
-        light_orange = (0, 0, 0)
-        dark_orange = (180, 180, 130)
-        mask = cv2.inRange(HSV, light_orange, dark_orange)
-        #cv2.imshow('mask', mask)
+        #Hue -> [0,179]
+        #Saturation -> [0,255]
+        #Value -> [0,255]
+        threshold1 = (0, 0, 0)
+        threshold2 = (110, 110, 100)
+        mask = cv2.inRange(HSV, threshold1, threshold2)
+        # cv2.imshow('mask', mask)
+        # cv2.waitKey(1)
 
         # Specify size on vertical axis
         vertical = np.copy(mask)
@@ -85,21 +145,98 @@ def videoDisplay():
         vertical = cv2.erode(vertical, verticalStructure)
         vertical = cv2.dilate(vertical, verticalStructure)
         # Show extracted vertical lines
-        #cv2.imshow("vertical", vertical)
-
-        #sobelx = cv2.Sobel(vertical,cv2.CV_8U,1,0,ksize=3)
-        #cv2.imshow('Sobel', sobelx)
+        # cv2.imshow("vertical", vertical)
+        # cv2.waitKey(1)
 
         #Opening
-        kernelo= np.ones((31,31),np.uint8)
-        opening = cv2.morphologyEx(vertical, cv2.MORPH_OPEN, kernelo)
-        cv2.imshow('opening', opening)
-        cv2.waitKey(1)
+        kernel = np.ones((15,15),np.uint8)
+        opening = cv2.morphologyEx(vertical, cv2.MORPH_OPEN, kernel)
+        # cv2.imshow('opening', opening)
+        # cv2.waitKey(1)
 
-        kernele = np.ones((11,11),np.uint8)
-        erosion = cv2.morphologyEx(opening, cv2.MORPH_ERODE, kernele)
-        cv2.imshow('erosion', erosion)
-        cv2.waitKey(1)
+        #Erosion
+        kernel1 = np.ones((3,19),np.uint8)
+        erosion = cv2.morphologyEx(vertical, cv2.MORPH_ERODE, kernel1)
+        # cv2.imshow('erosion', erosion)
+        # cv2.waitKey(1)
+
+        #New portion of code for BLOB detection and line drawing
+        kernel2 = np.ones((55,35),np.uint8)
+        dilation = cv2.morphologyEx(erosion, cv2.MORPH_DILATE, kernel2)
+        contours, hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        for c in contours:
+            M = cv2.moments(c)
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            # print(cX,cY)
+
+            list1 = [[int(x), cX],[int(y), cY]]
+            # print(list1)
+
+            matrix = np.array(list1)
+
+            # print(vector)
+            dilation2 = cv2.cvtColor(dilation, cv2.COLOR_GRAY2BGR)
+
+            #Circles and Lines for dilation
+            cv2.circle(dilation2,center_coordinates,radius,(0,0,255),thickness)
+            cv2.drawContours(dilation2, contours, -1, (0, 255, 0), 3) 
+            cv2.circle(dilation2, (cX, cY), 5, (255, 0, 0), -1)
+            cv2.arrowedLine(dilation2, center_coordinates, (cX, cY), (0,0,255), 1)
+
+            #Image distance
+            dist =((x-cX)**2 + (y-cY)**2)**.5
+            #print(dist)
+
+            #Defining Quadrants 
+            quadrant = 0
+
+            if dist < 150:
+                if cX < 336 and cY < 252:
+                    quadrant = 1
+                    #print("This point belongs to quadrant number " + str(quadrant))
+                    # try:
+                    #     rotation(2,10,100)
+                    # except:
+                    #     break                        
+                
+                elif 336 < cX  and cX < 675 and cY < 252:
+                    quadrant = 2
+                    #print("This point belongs to quadrant number " + str(quadrant))
+                    # try:
+                    #     rotation(2,10,-100)
+                    # except:
+                    #     break           
+
+                elif cX < 336 and 252 < cY and cY < 504:
+                    quadrant = 3
+                    #print("This point belongs to quadrant number " + str(quadrant))
+                    # try:
+                        # rotation(2,-10,100)
+                    # except:
+                    #     break     
+
+                elif 336 < cX and cX < 675 and 252 < cY and cY < 504:
+                    quadrant = 4
+                    #print("This point belongs to quadrant number " + str(quadrant))
+                    # try:
+                    #     rotation(2,-10,-100)
+                    # except:
+                    #     break     
+
+            #elif dist > 150:
+                #forward(25)
+
+            #Circles and Lines for Original
+            cv2.circle(resized,center_coordinates,radius,(0,0,255),thickness)
+            cv2.drawContours(resized, contours, -1, (0, 255, 0), 3) 
+            cv2.circle(resized, (cX, cY), 5, (255, 0, 0), -1)
+            cv2.arrowedLine(resized, center_coordinates, (cX, cY), (0,0,255), 1)
+
+            # cv2.imshow('Original', resized)
+            # cv2.waitKey(1)
+            # cv2.imshow('Final', dilation2)
+            # cv2.waitKey(1)
 
 def battery():
     global current_time
