@@ -4,12 +4,15 @@ import time
 import cv2.cv2 as cv2
 import numpy as np
 import math
+import matplotlib as plt
 
 host = ''
 port = 9000
 locaddr = (host,port)
 stream_state = False
 frame = np.zeros((720,960,3),np.uint8)
+dilation = np.zeros((720,960,3),np.uint8)
+resized = np.zeros((504,672,3),np.uint8)
 current_time = time.time()
 data = ""
 
@@ -30,6 +33,8 @@ def streamon():
     streamThread.start()
     displayThread = threading.Thread(target=videoDisplay)
     displayThread.start()
+    controlThread = threading.Thread(target=Control)
+    controlThread.start()
 
 def recv():
     global data
@@ -47,24 +52,36 @@ def videoStream():
     while ret:
         ret, frame = cap.read()
 
-def forward(vel):
-    print("We're moving forward!")
+def takeoff():
+    #print("We're moving forward!")
     sent = sock.sendto(b'takeoff', command_address)
+
+def forward(vel):
+    #print("We're moving forward!")
     sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
 
 def rotation(tvel,vvel,rvel):
-    print("We're yawing!")
+    #print("We're yawing!")
     #sent = sock.sendto(b'takeoff', command_address)
     sent = sock.sendto(b'rc 0 '+ str(tvel).encode() + str(vvel).encode() + str(rvel).encode(), command_address)
 
+def simplerotation(rvel):
+    #print("We're yawing!")
+    #sent = sock.sendto(b'takeoff', command_address)
+    sent = sock.sendto(b'rc 0 0 0 ' + str(rvel).encode(), command_address)
     
 def videoDisplay():
+    #takeoff()
     global frame
+    global resized
+    global dilation
     while stream_state:
         #New portion Image Processing
         scale_percent = 70  # percent of original size
         width = int(frame.shape[1] * scale_percent / 100)
+        #print(width)
         height = int(frame.shape[0] * scale_percent / 100)
+        #print(height)
         dim = (width, height)
         # resize image
         resized = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
@@ -76,43 +93,11 @@ def videoDisplay():
         color = (0,0,255)
         thickness = -1
         cv2.circle(resized,center_coordinates,radius,color,thickness)
-        cv2.imshow('original', resized)
-        cv2.waitKey(1)
+        # cv2.imshow('original', resized)
+        # cv2.waitKey(1)
 
         #############################################################
-        #########WALL AVOIDANCE######################################
-        #############################################################
-
-        #Median Blur
-        medianBlur = cv2.medianBlur(resized, 45)
-        cv2.imshow('Median Blur', medianBlur)
-        cv2.waitKey(1)
-
-        #Gresycale
-        grey_scale = cv2.cvtColor(medianBlur, cv2.COLOR_BGR2GRAY)
-        cv2.imshow('Grey Scale', grey_scale)
-        cv2.waitKey(1)
-
-        #Treshold
-        ret,thresh1 = cv2.threshold(grey_scale,127,255,cv2.THRESH_BINARY)
-        cv2.imshow('Treshold', thresh1)
-        cv2.waitKey(1)
-
-        # Closing
-        closekernel = np.ones((15,15),np.uint8)
-        closing = cv2.morphologyEx(thresh1, cv2.MORPH_CLOSE, closekernel)
-        cv2.imshow('Closing', closing)
-        cv2.waitKey(1)
-
-        # Blob Data
-        n, labels, stats, _ = cv2.connectedComponentsWithStats(closing)
-        print(n)
-        #print(labels)
-        print(stats[labels][4])
-
-
-        #############################################################
-        ##########OBSTACLE AVOIDANCE#################################
+        ########## OBSTACLE AVOIDANCE ###############################
         #############################################################
 
         #GaussianBlur
@@ -163,81 +148,116 @@ def videoDisplay():
         #New portion of code for BLOB detection and line drawing
         kernel2 = np.ones((55,35),np.uint8)
         dilation = cv2.morphologyEx(erosion, cv2.MORPH_DILATE, kernel2)
+        cv2.imshow('dilation', dilation)
+        cv2.waitKey(1)
+
         contours, hierarchy = cv2.findContours(dilation, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        for c in contours:
-            M = cv2.moments(c)
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-            # print(cX,cY)
+        cnt = contours[0]
+        M = cv2.moments(cnt)
+        # for c in contours:
+        #     M = cv2.moments(c)
+        #     cX = int(M["m10"] / M["m00"])
+        #     cY = int(M["m01"] / M["m00"])
+        #print(cX,cY)
 
-            list1 = [[int(x), cX],[int(y), cY]]
-            # print(list1)
+        area = cv2.contourArea(cnt)
+        print(area)
 
-            matrix = np.array(list1)
+        if area 
 
-            # print(vector)
-            dilation2 = cv2.cvtColor(dilation, cv2.COLOR_GRAY2BGR)
+       
+def Control():
+    print("Control Function")
+    global dilation
+    global resized
+    # cv2.imshow('resized', resized)
+    # cv2.waitKey(1)
+ 
+    # while stream_state:
 
-            #Circles and Lines for dilation
-            cv2.circle(dilation2,center_coordinates,radius,(0,0,255),thickness)
-            cv2.drawContours(dilation2, contours, -1, (0, 255, 0), 3) 
-            cv2.circle(dilation2, (cX, cY), 5, (255, 0, 0), -1)
-            cv2.arrowedLine(dilation2, center_coordinates, (cX, cY), (0,0,255), 1)
 
-            #Image distance
-            dist =((x-cX)**2 + (y-cY)**2)**.5
-            #print(dist)
+        # list1 = [[int(x), cX],[int(y), cY]]
+        # # print(list1)
 
-            #Defining Quadrants 
-            quadrant = 0
+        # matrix = np.array(list1)
 
-            if dist < 150:
-                if cX < 336 and cY < 252:
-                    quadrant = 1
-                    #print("This point belongs to quadrant number " + str(quadrant))
-                    # try:
-                    #     rotation(2,10,100)
-                    # except:
-                    #     break                        
-                
-                elif 336 < cX  and cX < 675 and cY < 252:
-                    quadrant = 2
-                    #print("This point belongs to quadrant number " + str(quadrant))
-                    # try:
-                    #     rotation(2,10,-100)
-                    # except:
-                    #     break           
+        # # print(vector)
+        # dilation2 = cv2.cvtColor(dilation, cv2.COLOR_GRAY2BGR)
 
-                elif cX < 336 and 252 < cY and cY < 504:
-                    quadrant = 3
-                    #print("This point belongs to quadrant number " + str(quadrant))
-                    # try:
-                        # rotation(2,-10,100)
-                    # except:
-                    #     break     
+        # #Circles and Lines for dilation
+        # cv2.circle(dilation2,center_coordinates,radius,(0,0,255),thickness)
+        # cv2.drawContours(dilation2, contours, -1, (0, 255, 0), 3) 
+        # cv2.circle(dilation2, (cX, cY), 5, (255, 0, 0), -1)
+        # cv2.arrowedLine(dilation2, center_coordinates, (cX, cY), (0,0,255), 1)
 
-                elif 336 < cX and cX < 675 and 252 < cY and cY < 504:
-                    quadrant = 4
-                    #print("This point belongs to quadrant number " + str(quadrant))
-                    # try:
-                    #     rotation(2,-10,-100)
-                    # except:
-                    #     break     
+        # #Image distance
+        # dist =((x-cX)**2 + (y-cY)**2)**.5
+        # print(dist)
 
-            #elif dist > 150:
-                #forward(25)
+        # #Defining Quadrants 
+        # quadrant = 0
 
-            #Circles and Lines for Original
-            cv2.circle(resized,center_coordinates,radius,(0,0,255),thickness)
-            cv2.drawContours(resized, contours, -1, (0, 255, 0), 3) 
-            cv2.circle(resized, (cX, cY), 5, (255, 0, 0), -1)
-            cv2.arrowedLine(resized, center_coordinates, (cX, cY), (0,0,255), 1)
+        # # if int(area[0][0]) > 200000 and int(area[0][0]) < 338687:
+        # #     print("I'm moving backwards!")
+        # #     simplerotation(100)
+        # #     print("I'm moving backwards! pt.2")
+        # # else:
+        # #     forward(20)
+        # #     print("STOP")
 
-            # cv2.imshow('Original', resized)
-            # cv2.waitKey(1)
-            # cv2.imshow('Final', dilation2)
-            # cv2.waitKey(1)
+        #     # time.sleep(5)
+        #     # rotation(0,0,50)
+        #     # time.sleep(5)
+        #     # forward(-2)
 
+        # # if dist < 50:
+        # #     if cX < int(width/2) and cY < int(height/2):
+        # #         quadrant = 1
+        # #         print("This point belongs to quadrant number " + str(quadrant))
+        # #         try:
+        # #             rotation(5,10,100)
+        # #         except:
+        # #             break                        
+            
+        # #     elif int(width/2) < cX  and cX < int(width) and cY < int(height/2):
+        # #         quadrant = 2
+        # #         print("This point belongs to quadrant number " + str(quadrant))
+        # #         try:
+        # #             rotation(5,10,-100)
+        # #         except:
+        # #             break           
+
+        # #     elif cX < int(width/2) and int(height/2) < cY and cY < height:
+        # #         quadrant = 3
+        # #         print("This point belongs to quadrant number " + str(quadrant))
+        # #         try:
+        # #             rotation(5,-10,100)
+        # #         except:
+        # #             break     
+
+        # #     elif int(width/2) < cX and cX < width and int(height/2) < cY and cY < height:
+        # #         quadrant = 4
+        # #         print("This point belongs to quadrant number " + str(quadrant))
+        # #         try:
+        # #             rotation(5,-10,-100)
+        # #         except:
+        # #             break     
+
+        # # elif dist > 150:
+        # #     forward(25)
+
+        # # #Circles and Lines for Original
+        # # cv2.circle(resized,center_coordinates,radius,(0,0,255),thickness)
+        # # cv2.drawContours(resized, contours, -1, (0, 255, 0), 3) 
+        # # cv2.circle(resized, (cX, cY), 5, (255, 0, 0), -1)
+        # # cv2.arrowedLine(resized, center_coordinates, (cX, cY), (0,0,255), 1)
+
+        # # # cv2.imshow('Original', resized)
+        # # # cv2.waitKey(1)
+        # # cv2.imshow('Final', dilation2)
+        # # cv2.waitKey(1)
+
+        
 def battery():
     global current_time
     while True:
@@ -263,5 +283,88 @@ def commands():
                 break
             msg = msg.encode(encoding="utf-8")
             sent = sock.sendto(msg, command_address)
-      
+
 commands()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # #############################################################
+        # #########WALL AVOIDANCE######################################
+        # #############################################################
+
+        # #Median Blur
+        # medianBlur = cv2.medianBlur(resized, 45)
+        # # cv2.imshow('Median Blur', medianBlur)
+        # # cv2.waitKey(1)
+
+        # #Gresycale
+        # grey_scale = cv2.cvtColor(medianBlur, cv2.COLOR_BGR2GRAY)
+        # # cv2.imshow('Grey Scale', grey_scale)
+        # # cv2.waitKey(1)
+
+        # #Treshold
+        # ret,thresh1 = cv2.threshold(grey_scale,127,255,cv2.THRESH_BINARY)
+        # # cv2.imshow('Treshold', thresh1)
+        # # cv2.waitKey(1)
+
+        # # Closing
+        # closekernel = np.ones((15,15),np.uint8)
+        # closing = cv2.morphologyEx(thresh1, cv2.MORPH_CLOSE, closekernel)
+        # #cv2.imshow('Closing', closing)
+        # #cv2.waitKey(1)
+
+        # # Blob Data
+        # n, labels, stats, _ = cv2.connectedComponentsWithStats(closing)
+
+        # area = stats[labels,cv2.CC_STAT_AREA]
+        # #print(area[0][0])
+
+
+
+
+        #     while stream_state:
+        # # cv2.imshow('resized', resized)
+        # # cv2.waitKey(1)
+        # cv2.imshow('dilation', dilation)
+        # cv2.waitKey(1)
+
+        # #BLOB detector
+        # params = cv2.SimpleBlobDetector_Params()
+
+        # params.filterByArea = True
+        # params.minArea = 300
+        # params.maxArea = 338688
+        # params.filterByColor = True
+        # params.blobColor = 255
+
+        # ver = (cv2.__version__).split('.')
+        # if int(ver[0]) < 3 :
+        #     detector = cv2.SimpleBlobDetector(params)
+        # else: 
+        #     detector = cv2.SimpleBlobDetector_create(params)
+
+        # keypoints = detector.detect(dilation)
+        # print(keypoints)
+        # im_with_keypoints = cv2.drawKeypoints(dilation, keypoints, np.array([]), (0,0,255), cv2.DFT_REAL_OUTPUT)
+
+        # cv2.imshow("final",im_with_keypoints)       
