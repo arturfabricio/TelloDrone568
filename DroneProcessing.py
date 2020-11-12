@@ -1,12 +1,13 @@
 import threading
 import socket
 import time
-import cv2.cv2 as cv2
+import cv2
 import numpy as np
 import math
 import matplotlib as plt
 
 host = ''
+
 port = 9000
 locaddr = (host,port)
 stream_state = False
@@ -67,7 +68,10 @@ def turn(tvel):
     print("We're turning!")
     #sent = sock.sendto(b'takeoff', command_address)
     sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
-    
+
+def tof():
+    sent = sock.sendto(b'tof?', command_address)
+
 def videoDisplay():
     #takeoff()
     global frame
@@ -75,7 +79,7 @@ def videoDisplay():
     global dilation
     global box
     while stream_state:
-        forward(30)
+       # forward(30)
         #New portion Image Processing
         scale_percent = 70  # percent of original size
         width = int(frame.shape[1] * scale_percent / 100)
@@ -95,15 +99,14 @@ def videoDisplay():
         thickness = -1
         cv2.circle(resized,center_coordinates,radius,color,thickness)
         #cv2.imshow('original', resized)
-        
-        CandB = np.zeros(resized.shape, resized.dtype)
-        alpha = 1
-        beta = 50
-        CandB = cv2.convertScaleAbs(resized, alpha=alpha, beta=beta)
-        cv2.imshow('Constrast and Brightness', CandB)
+       # CandB = np.zeros(resized.shape, resized.dtype)
+       # alpha = 1
+       # beta = 50
+       # CandB = cv2.convertScaleAbs(resized, alpha=alpha, beta=beta)
+       # cv2.imshow('Constrast and Brightness', CandB)
 
         #GaussianBlur
-        blur = cv2.GaussianBlur(CandB, (3, 3), 0)
+        blur = cv2.GaussianBlur(resized, (3, 3), 0)
         #cv2.imshow('Gaussian Blur', blur)
 
         #HSV
@@ -152,33 +155,31 @@ def videoDisplay():
 
             areaList = area
             xList = rect[0]
-            yList = rect[1] 
-            wList = rect[2]        
+            yList = rect[1]
+            wList = rect[2]
             hList = rect[3]
 
             dilation2 = cv2.cvtColor(dilation, cv2.COLOR_GRAY2BGR)
-            cv2.drawContours(dilation2, contours, -1, (0, 255, 0), 3) 
-            cv2.drawContours(resized, contours, -1, (0, 255, 0), 3) 
+            cv2.drawContours(dilation2, contours, -1, (0, 255, 0), 3)
+            cv2.drawContours(resized, contours, -1, (0, 255, 0), 3)
 
             if hList > 400:
                 print("im in!")
-                start_point = (xList, yList) 
-                end_point = (xList+wList, yList+hList) 
-                color = (255, 0, 0)  
+                start_point = (xList, yList)
+                end_point = (xList+wList, yList+hList)
+                color = (255, 0, 0)
                 thickness = -1
                 image = cv2.rectangle(final, start_point, end_point, color, thickness)
 
                 if xList < int(width/2):
                     quadrant = "left"
-                    print("This blob belongs to the " + quadrant + " side.")                
+                    print("This blob belongs to the " + quadrant + " side.")
                 elif xList > int(width/2):
                     quadrant = "right"
-                    print("This blob belongs to the " + quadrant + " side.")                
-                    
-            cv2.imshow('Final', final)
-            cv2.imshow('Original', resized)
-            i += 1
-        cv2.waitKey(20)
+                    print("This blob belongs to the " + quadrant + " side.")
+        #    cv2.imshow('Final', final)
+        #    cv2.imshow('Original', resized
+            # cv2.waitKey(20)
 
     if quadrant == "left":
         takeoff()
@@ -221,7 +222,7 @@ def videoDisplay():
         forward(0)
         land()
         print("land")
-      
+
 def battery():
     global current_time
     while True:
@@ -232,21 +233,27 @@ batteryThread = threading.Thread(target=battery)
 batteryThread.start()
 
 def commands():
+    time.sleep(10)
     sent = sock.sendto(b'command', command_address)
     sent = sock.sendto(b'battery?', command_address)
     global data
-    streamon()
+    print("we are in!!!!")
+ #   streamon()
 
     while True:
         if data != "executed":
             msg = input().rstrip()
             if 'end' in msg:
                 sent = sock.sendto(b'streamoff', command_address)
-                print('...')
+                print('...command sent')
                 sock.close()
+                print('error streamoff')
                 break
-            msg = msg.encode(encoding="utf-8")
+            msg = msg.encode(encoding="utf-8") #how the message is encoded
             sent = sock.sendto(msg, command_address)
-#takeoff()
-time.sleep(10)
-commands()   
+
+commands()
+
+takeoff()
+forward(5)
+tof()
