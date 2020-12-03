@@ -4,10 +4,12 @@ import time
 import cv2
 import numpy as np
 import math
-import matplotlib as plt
+# import matplotlib as plt
+from matplotlib import pyplot as plt
 
 host = ''
 
+ret = False
 port = 9000
 locaddr = (host,port)
 stream_state = False
@@ -15,15 +17,16 @@ frame = np.zeros((720,960,3),np.uint8)
 dilation = np.zeros((720,960,3),np.uint8)
 box = np.zeros((504,672,3),np.uint8)
 resized = np.zeros((504,672,3),np.uint8)
-current_time = time.time()
+blank_image = np.full((800, 800), 255, dtype=np.uint8)
+path = np.zeros((800,800,3),np.uint8)
 data = ""
 quadrant = "none"
-
 distance_list = []
-direction_list = []
-time_flown = 0
-distance_flown = 0
-start = 0
+current_time = time.time()
+x, y = 0, 0
+x_old, y_old = 0, 0
+forwardvel = 30
+final_h = 0
 
 #Create a UDP Socket for commands
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -53,6 +56,7 @@ recvThread = threading.Thread(target=recv)
 recvThread.start()
 
 def videoStream():
+    global ret
     global frame
     cap = cv2.VideoCapture(video_address, cv2.CAP_FFMPEG)
     ret, frame = cap.read()
@@ -60,94 +64,135 @@ def videoStream():
         ret, frame = cap.read()
 
 def takeoff():
-    print("We're taking off!")
+    #print("We're taking off!")
+    sent = sock.sendto(b'takeoff', command_address)
+    sent = sock.sendto(b'takeoff', command_address)
+    sent = sock.sendto(b'takeoff', command_address)
+    sent = sock.sendto(b'takeoff', command_address)
     sent = sock.sendto(b'takeoff', command_address)
 
+def height():
+    global final_h
+    sent = sock.sendto(b'tof?', command_address)
+    while True:
+        altitude = str(input())
+        print(altitude[-1])
+        if altitude[4] == 'm':
+            final_h = altitude * 0.1
+            print(final_h)
+    
 def land():
     print("We're landing!")
+    sent = sock.sendto(b'land', command_address)
+    sent = sock.sendto(b'land', command_address)
+    sent = sock.sendto(b'land', command_address)
+    sent = sock.sendto(b'land', command_address)
     sent = sock.sendto(b'land', command_address)
 
 def stop():
     print("We're stopping!")
     sent = sock.sendto(b'stop', command_address)
+    sent = sock.sendto(b'stop', command_address)
+    sent = sock.sendto(b'stop', command_address)
+    sent = sock.sendto(b'stop', command_address)
+    sent = sock.sendto(b'stop', command_address)
 
 def simpleforward(vel):
     sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
 
 def forward(vel,time_int):
+    global x
     sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
-    realvel = abs(vel)
-    distance = realvel * time_int
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+    sent = sock.sendto(b'rc 0 '+ str(vel).encode() + b' 0 0', command_address)
+
+    distance = vel * time_int
+    x += distance
     if vel > 0:
         print("We're moving forwards!")
         distance_list.append(distance)
-        direction_list.append("forward")
     elif vel < 0:
         print("We're moving backwards!")
         distance_list.append(distance)
-        direction_list.append("backward")
     time.sleep(time_int)
+    distance = abs(distance)
     if vel != 0:
         print("The distance flown was: " + str(distance) + "cm!")
 
 def turn(tvel,time_tvel):
+    global y
+
     sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
-    realvel = abs(tvel)
-    distance = realvel * time_tvel
+    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+
+    distance = tvel * time_tvel
+    y += distance
     if tvel > 0:
         print("We're moving right!")
         distance_list.append(distance)
-        direction_list.append("right")
     elif tvel < 0:
         print("We're moving left!")
         distance_list.append(distance)
-        direction_list.append("left")
     time.sleep(time_tvel)
+    distance = abs(distance)
     if tvel != 0:
         print("The distance flown was: " + str(distance) + "cm!")
 
 def right():
     stop()
-    turn(30,5)
+    turn(60,2)
     stop()
-    forward(30,10)
+    forward(100,2)
     stop()
-    turn(-30,5)
-    stop()
-    simpleforward(30)
-    #land()
-    distance()
-
-def left():
-    stop()
-    turn(-30,5)
-    stop()
-    forward(30,10)
-    stop()
-    turn(30,5)
-    stop()
-    forward(30,5)
+    turn(-60,2)
     stop()
     land()
-    distance()
+    simpleforward(30)
+    
+def left():
+    stop()
+    turn(-60,2)
+    stop()
+    forward(100,2)
+    stop()
+    turn(60,2)
+    stop()
+    land()
+    simpleforward(30)
 
-def distance():
-    for i in range(0,len(distance_list)):
-        print(direction_list[i],distance_list[i])
-        i += 1
 
 def videoDisplay():
-    global start
-    start = time.time()
     global frame
+    global ret
     global resized
     global dilation
     global box
-    global time_flown
-    #simpleforward(10)
+    global blank_image
+    global final_h
+    simpleforward(forwardvel)
+    start_time = time.time()
+
+    ################################################
+    global x, y
+    global x_old, y_old
+    width, height = 800, 800
+    path = cv2.cvtColor(blank_image, cv2.COLOR_GRAY2BGR)
+    red = (0,0,255)
+    radius = 6
+    thickness = -1
+    cv2.circle(path, (0, 400), radius, red, thickness)
+    #################################################
+
     while stream_state:
-        quadrant = "none"
-        #forward(30)
         #New portion Image Processing
         scale_percent = 70  # percent of original size
         width = int(frame.shape[1] * scale_percent / 100)
@@ -194,11 +239,6 @@ def videoDisplay():
         # Show extracted vertical lines
         #cv2.imshow("vertical", vertical)
 
-        #Opening
-        kernel = np.ones((17,17),np.uint8)
-        opening = cv2.morphologyEx(vertical, cv2.MORPH_OPEN, kernel)
-        #cv2.imshow('opening', opening)
-
         kernel1 = np.ones((3,10),np.uint8)
         erosion = cv2.morphologyEx(vertical, cv2.MORPH_ERODE, kernel1)
         #cv2.imshow('erosion', erosion)
@@ -226,29 +266,32 @@ def videoDisplay():
             cv2.drawContours(dilation2, contours, -1, (0, 255, 0), 3)
             cv2.drawContours(resized, contours, -1, (0, 255, 0), 3)
 
-            if hList > 400:
-                end = time.time()
-                time_flown = end - start
-                print(time_flown)
-                distance_flown = 10 * time_flown
-                print(distance_flown)
+            # if areaList < 337500:                                        
+            #     takeoff()
+
+            if hList > 400 and areaList < 337500: 
                 start_point = (xList, yList)
                 end_point = (xList+wList, yList+hList)
                 color = (255, 0, 0)
                 thickness = -1
-                image = cv2.rectangle(final, start_point, end_point, color, thickness) 
+                image = cv2.rectangle(final, start_point, end_point, color, thickness)
+                image_processing_time = time.time()-start_time
+                x += image_processing_time * forwardvel
 
                 if cX < int(width/2) and areaList < 337500:
-                    quadrant = "left"
+                    print("This blob belongs to the left side.")          
                     left()
-                    #print("This blob belongs to the " + quadrant + " side.")
                 elif cX > int(width/2) and areaList < 337500:
-                    quadrant = "right"
+                    print("This blob belongs to the right side.")
                     right()
-                    #print("This blob belongs to the " + quadrant + " side.")
-        cv2.imshow('Final', final)
-        cv2.imshow('Original', resized)
-        cv2.waitKey(20)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(final, 'x:' + str(x) + " y:" + str(y) + " h:" + str(final_h), (0,25), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        # cv2.imshow('Final', final)
+
+        #cv2.imshow('Original', resized)
+        #cv2.imshow("Drone Trajectory", path)
+        # cv2.waitKey(20)
         
 def battery():
     global current_time
@@ -256,16 +299,17 @@ def battery():
         if time.time() - current_time > 10:
             sent = sock.sendto(b'battery?', command_address)
             current_time = time.time()
+            height()
 batteryThread = threading.Thread(target=battery)
 batteryThread.start()
 
 def commands():
-    time.sleep(10)
     sent = sock.sendto(b'command', command_address)
     sent = sock.sendto(b'battery?', command_address)
     global data
     streamon()
     #takeoff()
+    #testmovement()
     
     while True:
         if data != "executed":
@@ -278,46 +322,7 @@ def commands():
                 break
             msg = msg.encode(encoding="utf-8") #how the message is encoded
             sent = sock.sendto(msg, command_address)
-
 commands()
-
-
-
-
-
-
-
-
-
-
-
-
-
-# blank_image = 255 * np.zeros(shape=[800,800,3],dtype=np.uint8)
-# width, height = 800, 800
-
-# #General Parameters
-# radius = 3
-# color = (0,0,255)
-# thickness = -1
-# line_thickness = 2
-# #Drone 1 initial coordinates
-# x1, y1 = 0, 200
-# image1 = cv2.circle(blank_image, (x1,y1), radius, color, thickness)
-# #Drone 1 initial coordinates
-# x2, y2 = 0, 400
-# image1 = cv2.circle(blank_image, (x2,y2), radius, color, thickness)
-# #Drone 1 initial coordinates
-# x3, y3 = 0, 600
-# image1 = cv2.circle(blank_image, (x3,y3), radius, color, thickness)
-
-# if distance_flown > 0 and quadrant == "none":
-#     nextpoint = (distance_flown, 200)
-#     cv2.line(blank_image, (x1, y1), nextpoint, (0, 255, 0), thickness=line_thickness)
-#     start = 0
-
-# cv2.imshow("White Blank", blank_image)
-# cv2.waitKey(20)
 
 
 # def testflight():
@@ -331,15 +336,4 @@ commands()
 #     lefttest(100)
 #     stop()
 #     land()
-#     attitude()
 
-# def testmovement():
-#     print("Test Movement IN")
-#     time.sleep(2)
-#     forward(15,5)
-#     forward(0,10)
-#     forward(-10,10)
-#     forward(0,2)
-#     land()
-#     print("Land")
-#     print("Test Movement OUT")
