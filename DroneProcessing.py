@@ -129,10 +129,10 @@ def turn(tvel,time_tvel):
     global y
 
     sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
-    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
-    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
-    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
-    # sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
+    sent = sock.sendto(b'rc '+ str(tvel).encode() + b' 0 0 0', command_address)
 
     distance = tvel * time_tvel
     y += distance
@@ -169,7 +169,6 @@ def left():
     land()
     simpleforward(30)
 
-
 def videoDisplay():
     global frame
     global ret
@@ -193,13 +192,10 @@ def videoDisplay():
     #################################################
 
     while stream_state:
-        #New portion Image Processing
         scale_percent = 70  # percent of original size
         width = int(frame.shape[1] * scale_percent / 100)
         height = int(frame.shape[0] * scale_percent / 100)
         dim = (width, height)
-        # print(height)
-        # print(width)
         xreal = int(width/2)
         yreal = int(height/2)
         resized = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
@@ -222,21 +218,18 @@ def videoDisplay():
         #cv2.imshow('HSV', HSV)
 
         #Mask
-        light_orange = (0, 0, 0)
-        dark_orange = (110, 110, 100)
-        mask = cv2.inRange(HSV, light_orange, dark_orange)
+        range1 = (0, 0, 0)
+        range2 = (110, 110, 100)
+        mask = cv2.inRange(HSV, range1, range2)
         #cv2.imshow('mask', mask)
 
-        # Specify size on vertical axis
+        # Vertical
         vertical = np.copy(mask)
         rows = vertical.shape[0]
         verticalsize = rows // 10
-        # Create structure element for extracting vertical lines through morphology operations
         verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, verticalsize))
-        # Apply morphology operations
         vertical = cv2.erode(vertical, verticalStructure)
         vertical = cv2.dilate(vertical, verticalStructure)
-        # Show extracted vertical lines
         #cv2.imshow("vertical", vertical)
 
         kernel1 = np.ones((3,10),np.uint8)
@@ -287,11 +280,9 @@ def videoDisplay():
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(final, 'x:' + str(x) + " y:" + str(y) + " h:" + str(final_h), (0,25), font, 1, (0, 255, 0), 2, cv2.LINE_AA)
-        # cv2.imshow('Final', final)
-
-        #cv2.imshow('Original', resized)
-        #cv2.imshow("Drone Trajectory", path)
-        # cv2.waitKey(20)
+        cv2.imshow('Final', final)
+        cv2.imshow('Original', resized)
+        cv2.waitKey(20)
         
 def battery():
     global current_time
@@ -308,8 +299,7 @@ def commands():
     sent = sock.sendto(b'battery?', command_address)
     global data
     streamon()
-    #takeoff()
-    #testmovement()
+    takeoff()
     
     while True:
         if data != "executed":
@@ -323,17 +313,3 @@ def commands():
             msg = msg.encode(encoding="utf-8") #how the message is encoded
             sent = sock.sendto(msg, command_address)
 commands()
-
-
-# def testflight():
-#     takeoff()
-#     forwardtest(100)
-#     stop()
-#     righttest(100)
-#     stop()
-#     forwardtest(100)
-#     stop()
-#     lefttest(100)
-#     stop()
-#     land()
-
