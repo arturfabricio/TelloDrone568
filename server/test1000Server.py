@@ -37,7 +37,7 @@ def vidCap():
             print("Retrieving frame")
             ret, frame = cap.retrieve()
             frame = cv2.resize(frame, (672,504))
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)        
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             s = frame.tobytes()
             pc_ready = False
         
@@ -49,7 +49,7 @@ def recv():
         rcv, addr = sock.recvfrom(1024)
         if rcv != b'ack':
             print("Received: " + rcv.decode(encoding="utf-8"))
-        if rcv == b'ready':
+        elif rcv == b'ready':
             pc_ready = True
         
 
